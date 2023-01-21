@@ -1,0 +1,147 @@
+version: '3'
+
+networks:
+  laravel:
+
+services:
+  nginx:
+    image: nginx:stable-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./src:/var/www/html:delegated
+      - ./nginx/default.conf:/etc/nginx/conf.d/
+    depends_on:
+      - php
+      - redis
+      - mysql
+      - mailhog
+    networks:
+      - laravel
+
+  mysql:
+    image: mariadb:10.6
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: homestead
+      MYSQL_USER: homestead
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: secret
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    networks:
+      - laravel
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 64M
+    restart: always
+    depends_on:
+      - mysql
+    ports:
+      - "8081:80"
+    volumes:
+      - /sessions
+    networks:
+      - laravel
+    links:
+      - mysql
+
+#  postgres:
+#    image: library/postgres:alpine
+#    restart: unless-stopped
+#    ports:
+#      - "3000:5432"
+#    environment:
+#      POSTGRES_DB: homestead
+#      POSTGRES_USER: homestead
+#      POSTGRES_PASSWORD: secret
+#    networks:
+#      - laravel
+#    volumes:
+#      - ./postgres:/var/lib/postgresql/data
+
+#  pgadmin:
+#    image: dpage/pgadmin4:latest
+#    ports:
+#      - "82:80"
+#    depends_on:
+#      - "postgres"
+#    environment:
+#      PGADMIN_DEFAULT_EMAIL: admin@mail.com
+#      PGADMIN_DEFAULT_PASSWORD: root
+#    networks:
+#      - laravel
+
+  php:
+    build:
+      context: ./dockerfiles
+      dockerfile: php.dockerfile
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./src:/var/www/html:delegated
+    networks:
+      - laravel
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - laravel
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - laravel
+
+  composer:
+    build:
+      context: ./dockerfiles
+      dockerfile: php.dockerfile
+    volumes:
+      - ./src:/var/www/html
+    depends_on:
+      - php
+    entrypoint: [ 'composer', '--ignore-platform-reqs' ]
+    networks:
+      - laravel
+
+  npm:
+    image: node:current-alpine
+    volumes:
+      - ./src:/var/www/html
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+      - "5173:5173"
+    working_dir: /var/www/html
+    entrypoint: [ 'npm' ]
+    networks:
+      - laravel
+
+  artisan:
+    build:
+      context: ./dockerfiles
+      dockerfile: php.dockerfile
+    volumes:
+      - ./src:/var/www/html:delegated
+    depends_on:
+      - mysql
+    entrypoint: [ 'php', '/var/www/html/artisan' ]
+    networks:
+      - laravel
